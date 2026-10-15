@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Key Issue Document Compiler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background: #f2f4f8; font-family: "Segoe UI", Arial, sans-serif; color: #222; }
+  .wrap { max-width: 980px; margin: 2rem auto; }
+  .card { border: none; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 2rem; }
+  h4.title { color: #002147; font-weight: 600; text-align: center; margin-bottom: 1.5rem; }
+  .btn-fatf { background: #002147; color: #fff; border: 0; }
+  .btn-fatf:hover { background: #00152d; color: #fff; }
+  .filelist { max-height: 150px; overflow-y: auto; font-size: .85rem;
+              background: #f7f8fa; border: 1px solid #e2e4ea; border-radius: 8px;
+              padding: .6rem .9rem; margin-top: .5rem; }
+  .filelist .ok { color: #1b7a28; }
+  .filelist .bad { color: #a1281c; }
+  .spinner-wrap { display:none; text-align:center; margin-top:1rem; }
+  #dropzone { border: 2px dashed #b8bfcc; border-radius: 10px; padding: 2rem;
+    text-align: center; color: #666; background: #fafbfd; cursor: pointer;
+    transition: border-color .2s, background .2s; }
+  #dropzone.drag { border-color: #002147; background: #e9eff8; color: #002147; }
+  .download-row { display:flex; flex-wrap:wrap; gap:.6rem; justify-content:center; }
+  small.note { color:#667; }
+  .issue { border-left: 4px solid #ccc; padding: .45rem .7rem; margin-bottom: .45rem;
+           background:#fafbfd; border-radius: 4px; font-size:.86rem; }
+  .issue.error   { border-left-color:#c0392b; background:#fdf1ef; }
+  .issue.warning { border-left-color:#e6a23c; background:#fdf8ee; }
+  .issue.info    { border-left-color:#4a90d9; background:#eff5fc; }
+  .issue .file   { font-weight:600; }
+  .badge-error{background:#c0392b}.badge-warning{background:#e6a23c}.badge-info{background:#4a90d9}
+  .review-table { font-size:.83rem; }
+  .review-table td, .review-table th { padding:.35rem .4rem; vertical-align:middle; }
+  .review-table select { font-size:.83rem; padding:.15rem .35rem; }
+  .fn { max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-empty { background:#fdecea; }
+  .row-mismatch { background:#fff7e6; }
+  .diag-table { font-size:.82rem; }
+  .diag-table td, .diag-table th { padding:.3rem .45rem; }
+  .m-yes { background:#dff5dc; font-weight:600; color:#1b7a28; text-align:center; }
+  .m-no  { background:#fdd; font-weight:600; color:#a1281c; text-align:center; }
+  .pill { font-size:.72rem; padding:.05rem .4rem; border-radius:10px; }
+  .pill-src { background:#eef1f6; color:#445; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h4 class="title">Key Issue Document Compiler (FATF MER)</h4>
+
+    <form id="f" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Delegation response files (.docx / .pdf)</label>
+        <div id="dropzone">
+          <div><strong>Drop files here</strong> or click to browse</div>
+          <small class="note">Word templates preferred; PDFs are parsed too.</small>
+        </div>
+        <input id="files" name="files" type="file" multiple accept=".docx,.pdf" hidden>
+        <div id="filelist" class="filelist" style="display:none"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Assessed country
+          <small class="note">(the country being evaluated)</small></label>
+        <select id="country" name="assessed_country" class="form-select">
+          <option value="">Auto-detect from filenames</option>
+        </select>
+      </div>
+
+      <button id="go" type="submit" class="btn btn-fatf w-100">Check and Compile</button>
+      <small class="note d-block text-center mt-2">
+        Every file is checked first. You confirm each delegation's country and
+        whether it was late before anything is compiled.
+      </small>
+    </form>
+
+    <div class="spinner-wrap" id="spin">
+      <div class="spinner-border text-primary" role="status"></div>
+      <div id="spinLabel">Checking files…</div>
+    </div>
+
+    <div id="result" class="mt-4" style="display:none">
+      <hr>
+      <p class="mb-2"><strong>Assessed country:</strong> <span id="rCountry"></span></p>
+      <p class="mb-2"><strong>Files processed:</strong> <span id="rFiles"></span></p>
+      <p class="mb-3"><strong>Comments compiled:</strong> <span id="rComments"></span></p>
+
+      <div id="reconBanner" class="alert py-2 mb-3" style="display:none"></div>
+
+      <div class="download-row">
+        <a href="/download/excel" class="btn btn-success px-4">Download Excel</a>
+        <a href="/download/word"  class="btn btn-fatf px-4">Download Word</a>
+        <a href="/download/diagnostics" class="btn btn-outline-dark px-4">Download Diagnostic Report</a>
+      </div>
+
+      <div class="mt-4">
+        <h6 class="fw-semibold mb-2">Diagnostic check – by file</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered diag-table">
+            <thead class="table-light"><tr><th>File</th><th>Country</th>
+              <th>Source rows</th><th>In compilation</th><th>Match</th></tr></thead>
+            <tbody id="diagFileRows"></tbody>
+          </table>
+        </div>
+        <h6 class="fw-semibold mb-2 mt-3">Diagnostic check – by country</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered diag-table">
+            <thead class="table-light"><tr><th>Country</th><th>Files</th>
+              <th>Expected</th><th>In compilation</th><th>Match</th></tr></thead>
+            <tbody id="diagCountryRows"></tbody>
+          </table>
+        </div>
+        <small class="note">Rows needing a human decision are listed in the
+          "Manual Checks" sheet of the diagnostic report.</small>
+      </div>
+
+      <div id="failedBox" class="mt-3" style="display:none">
+        <small class="note">Files that produced no comments:</small>
+        <div id="rFailed" class="filelist"></div>
+      </div>
+    </div>
+
+    {% if last.excel %}
+    <div class="mt-4">
+      <hr>
+      <small class="note">Last run: {{ last.when }} · country: {{ last.country }} ·
+         {{ last.comment_count }} comments from {{ last.ok_count }} files.</small>
+      <div class="download-row mt-2">
+        <a href="/download/excel" class="btn btn-outline-success btn-sm">Re-download Excel</a>
+        <a href="/download/word" class="btn btn-outline-dark btn-sm">Re-download Word</a>
+        <a href="/download/diagnostics" class="btn btn-outline-secondary btn-sm">Re-download Diagnostics</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ===================== REVIEW / VALIDATION MODAL ===================== -->
+<div class="modal fade" id="checkModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm before compiling</h5>
+      </div>
+      <div class="modal-body">
+
+        <h6 class="fw-semibold">1 · Confirm each delegation</h6>
+        <p class="small text-muted mb-2">
+          Check the country against the file. Correct it from the dropdown if
+          wrong – typing is disabled so a delegation can never be misspelled.
+          Set Late where the submission missed the deadline.
+        </p>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered review-table align-middle">
+            <thead class="table-light">
+              <tr><th style="width:26%">File</th><th style="width:12%">Detected</th>
+                  <th style="width:26%">Country making the comments</th>
+                  <th style="width:14%">Timeliness</th>
+                  <th style="width:10%">Comments</th>
+                  <th style="width:12%">Accept empty</th></tr>
+            </thead>
+            <tbody id="reviewRows"></tbody>
+          </table>
+        </div>
+
+        <div id="blockBox" class="alert alert-danger py-2" style="display:none"></div>
+
+        <hr>
+        <h6 class="fw-semibold">2 · Findings
+          <span class="badge badge-error"   id="cntError">0 errors</span>
+          <span class="badge badge-warning" id="cntWarn">0 warnings</span>
+          <span class="badge badge-info"    id="cntInfo">0 notices</span>
+        </h6>
+        <div id="issueList"></div>
+        <div id="noIssues" class="text-success" style="display:none">
+          ✔ No issues found – everything looks clean.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" id="confirmCompile" class="btn btn-fatf">Compile</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const filesInput = document.getElementById('files');
+const dz   = document.getElementById('dropzone');
+const list = document.getElementById('filelist');
+const countrySel = document.getElementById('country');
+
+let selectedFiles = [];
+let lastValidation = null;
+let countryGroups = null;
+
+/* ---------- file picking ---------- */
+function renderList() {
+  if (!selectedFiles.length) { list.style.display='none'; return; }
+  list.style.display='block';
+  list.innerHTML = selectedFiles.map(f =>
+    `<div class="ok">• ${esc(f.name)} <small>(${(f.size/1024).toFixed(0)} KB)</small></div>`).join('');
+}
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,
+  m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+/* populate the assessed-country picker on load so nothing is ever typed */
+fetch('/countries').then(r=>r.json()).then(j=>{ countryGroups=j.groups; fillAssessed(j.groups); })
+  .catch(()=>{});
+
+dz.addEventListener('click', () => filesInput.click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  selectedFiles = Array.from(e.dataTransfer.files).filter(f => /\.(docx|pdf)$/i.test(f.name));
+  renderList();
+});
+filesInput.addEventListener('change', () => {
+  selectedFiles = Array.from(filesInput.files); renderList();
+});
+
+/* ---------- country dropdown helpers ---------- */
+function optionsHtml(groups, selected) {
+  let html = '<option value="">Select country</option>';
+  groups.forEach(([label, names]) => {
+    html += `<optgroup label="${esc(label)}">`;
+    names.forEach(n => {
+      const sel = (n === selected) ? ' selected' : '';
+      html += `<option value="${esc(n)}"${sel}>${esc(n)}</option>`;
+    });
+    html += '</optgroup>';
+  });
+  return html;
+}
+function fillAssessed(groups) {
+  if (countrySel.dataset.filled) return;
+  countrySel.innerHTML = '<option value="">Auto-detect from filenames</option>'
+                       + optionsHtml(groups, '').replace('<option value="">Select country</option>', '');
+  countrySel.dataset.filled = '1';
+}
+
+function buildForm() {
+  const form = new FormData();
+  selectedFiles.forEach(f => form.append('files', f));
+  form.append('assessed_country', countrySel.value.trim());
+  return form;
+}
+function spin(on, label) {
+  document.getElementById('spin').style.display = on ? 'block' : 'none';
+  document.getElementById('spinLabel').innerText = label || 'Working…';
+  document.getElementById('go').disabled = on;
+}
+
+/* ---------- phase 1: validate ---------- */
+document.getElementById('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (!selectedFiles.length) return alert('Add .docx or .pdf files first.');
+  spin(true, 'Checking files…');
+  document.getElementById('result').style.display = 'none';
+  try {
+    const res = await fetch('/validate', { method:'POST', body: buildForm() });
+    const j = await res.json();
+    spin(false);
+    if (!j.ok) return alert('Error: ' + (j.error || 'unknown'));
+    lastValidation = j; countryGroups = j.countries;
+    fillAssessed(j.countries);
+    showModal(j);
+  } catch (err) { spin(false); alert('Error: ' + err.message); }
+});
+
+function showModal(v) {
+  const rows = document.getElementById('reviewRows');
+  rows.innerHTML = v.assignments.map(a => {
+    const cls = a.empty ? 'row-empty' : (a.mismatch ? 'row-mismatch' : '');
+    const detected = a.error ? '<span class="text-danger">unreadable</span>'
+      : (a.declared ? esc(a.declared) + (a.recognised ? '' : ' <span class="text-warning">?</span>')
+                    : '<span class="text-muted">none in file</span>');
+    const acc = a.empty
+      ? `<input type="checkbox" class="form-check-input accept-empty" data-filename="${esc(a.filename)}">`
+      : '<span class="text-muted small">n.a.</span>';
+    return `<tr class="${cls}">
+      <td class="fn" title="${esc(a.filename)}">${esc(a.filename)}
+        <div><span class="pill pill-src">${esc(a.kind||'')}</span></div></td>
+      <td class="small">${detected}</td>
+      <td><select class="form-select form-select-sm country-pick"
+                  data-filename="${esc(a.filename)}">
+            ${optionsHtml(v.countries, a.selected)}
+          </select></td>
+      <td><select class="form-select form-select-sm late-pick"
+                  data-filename="${esc(a.filename)}">
+            <option value="0"${a.late ? '' : ' selected'}>On time</option>
+            <option value="1"${a.late ? ' selected' : ''}>Late</option>
+          </select></td>
+      <td class="text-center ${a.empty ? 'text-danger fw-bold' : ''}">${a.comments}</td>
+      <td class="text-center">${acc}</td>
+    </tr>`;
+  }).join('');
+
+  const block = document.getElementById('blockBox');
+  if (v.empty_files.length) {
+    block.style.display = 'block';
+    block.innerHTML = `<strong>${v.empty_files.length} file(s) produced no comments.</strong>
+      Fix and re-upload them, or tick “Accept empty” so it is recorded that they
+      contribute nothing. Compiling is blocked until then.`;
+  } else { block.style.display = 'none'; }
+
+  const listEl = document.getElementById('issueList');
+  listEl.innerHTML = ''; let nE=0,nW=0,nI=0;
+  v.issues.forEach(i => {
+    if (i.severity==='error') nE++; else if (i.severity==='warning') nW++; else nI++;
+    const d=document.createElement('div'); d.className='issue '+i.severity;
+    d.innerHTML=`<span class="file">${esc(i.file)}</span> – ${esc(i.message)}`;
+    listEl.appendChild(d);
+  });
+  document.getElementById('cntError').innerText = nE+' errors';
+  document.getElementById('cntWarn').innerText  = nW+' warnings';
+  document.getElementById('cntInfo').innerText  = nI+' notices';
+  document.getElementById('noIssues').style.display = v.issues.length ? 'none' : 'block';
+
+  new bootstrap.Modal(document.getElementById('checkModal')).show();
+}
+
+/* ---------- phase 2: compile ---------- */
+document.getElementById('confirmCompile').addEventListener('click', async () => {
+  const decisions = {}; let missing = null;
+  document.querySelectorAll('.country-pick').forEach(sel => {
+    const fn = sel.dataset.filename, v = sel.value.trim();
+    if (!v) missing = fn;
+    decisions[fn] = { country: v, late: false };
+  });
+  if (missing) return alert(`Select the country for "${missing}" before compiling.`);
+  document.querySelectorAll('.late-pick').forEach(sel => {
+    const fn = sel.dataset.filename;
+    if (decisions[fn]) decisions[fn].late = (sel.value === '1');
+  });
+
+  const accepted = [];
+  document.querySelectorAll('.accept-empty').forEach(cb => {
+    if (cb.checked) accepted.push(cb.dataset.filename);
+  });
+  const empties = (lastValidation && lastValidation.empty_files) || [];
+  const blocked = empties.filter(f => !accepted.includes(f));
+  if (blocked.length) {
+    return alert('These files produced no comments:\n\n• ' + blocked.join('\n• ') +
+      '\n\nFix and re-upload them, or tick “Accept empty” for each.');
+  }
+
+  bootstrap.Modal.getInstance(document.getElementById('checkModal')).hide();
+  spin(true, 'Compiling…');
+  const form = buildForm();
+  form.append('jurisdiction_overrides', JSON.stringify(decisions));
+  form.append('accepted_empty', JSON.stringify(accepted));
+
+  try {
+    const res = await fetch('/process', { method:'POST', body: form });
+    const j = await res.json();
+    spin(false);
+    if (!j.ok) {
+      if (j.blocked) return alert(j.error + '\n\n• ' + (j.needs_acknowledgement||[]).join('\n• '));
+      return alert('Error: ' + (j.error || 'unknown'));
+    }
+    document.getElementById('rCountry').innerText  = j.country;
+    document.getElementById('rFiles').innerText    = j.files_ok;
+    document.getElementById('rComments').innerText = j.comments;
+    if (j.failed && j.failed.length) {
+      document.getElementById('failedBox').style.display = 'block';
+      document.getElementById('rFailed').innerHTML =
+        j.failed.map(n => `<div class="bad">• ${esc(n)}</div>`).join('');
+    } else { document.getElementById('failedBox').style.display = 'none'; }
+    renderDiagnostics(j);
+    document.getElementById('result').style.display = 'block';
+  } catch (err) { spin(false); alert('Error: ' + err.message); }
+});
+
+function renderDiagnostics(j) {
+  const d = j.diagnostics || {}, t = d.totals || {};
+  const b = document.getElementById('reconBanner');
+  if (j.reconciled) {
+    b.className = 'alert alert-success py-2 mb-3';
+    b.innerHTML = `<strong>✔ All counts reconcile.</strong> ${t.rows_in_source} source rows →
+      ${t.rows_skipped} skipped, ${t.duplicates_removed} duplicates removed →
+      ${t.compiled} comments across ${t.countries} delegations.`;
+  } else {
+    b.className = 'alert alert-danger py-2 mb-3';
+    b.innerHTML = `<strong>⚠ Count mismatch.</strong> ${j.file_mismatches} file(s) and
+      ${j.country_mismatches} country/countries do not reconcile – see the report.`;
+  }
+  b.style.display = 'block';
+
+  document.getElementById('diagFileRows').innerHTML = (d.files||[]).map(f => `
+    <tr><td>${esc(f['File name'])}</td><td>${esc(f['Country assigned'])}</td>
+      <td>${f['Rows in source table']}</td><td>${f['Actually in compilation']}</td>
+      <td class="${f['Match']==='YES'?'m-yes':'m-no'}">${f['Match']}</td></tr>` +
+    (f['Notes'] ? `<tr><td colspan="5" class="small text-muted">${esc(f['Notes'])}</td></tr>` : '')
+  ).join('');
+
+  document.getElementById('diagCountryRows').innerHTML = (d.countries||[]).map(c => `
+    <tr><td>${esc(c['Country'])}</td><td class="small">${c['No. of files']}</td>
+      <td>${c['Expected comments']}</td><td>${c['Comments in compilation']}</td>
+      <td class="${c['Match']==='YES'?'m-yes':'m-no'}">${c['Match']}</td></tr>`).join('');
+}
+</script>
+</body>
+</html>
