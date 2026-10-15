@@ -2,225 +2,509 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Key Issue Document Compiler</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { background: #f2f4f8; font-family: "Segoe UI", Arial, sans-serif; color: #222; }
-  .wrap { max-width: 980px; margin: 2rem auto; }
-  .card { border: none; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.08); padding: 2rem; }
-  h4.title { color: #002147; font-weight: 600; text-align: center; margin-bottom: 1.5rem; }
-  .btn-fatf { background: #002147; color: #fff; border: 0; }
-  .btn-fatf:hover { background: #00152d; color: #fff; }
-  .filelist { max-height: 150px; overflow-y: auto; font-size: .85rem;
-              background: #f7f8fa; border: 1px solid #e2e4ea; border-radius: 8px;
-              padding: .6rem .9rem; margin-top: .5rem; }
-  .filelist .ok { color: #1b7a28; }
-  .filelist .bad { color: #a1281c; }
-  .spinner-wrap { display:none; text-align:center; margin-top:1rem; }
-  #dropzone { border: 2px dashed #b8bfcc; border-radius: 10px; padding: 2rem;
-    text-align: center; color: #666; background: #fafbfd; cursor: pointer;
-    transition: border-color .2s, background .2s; }
-  #dropzone.drag { border-color: #002147; background: #e9eff8; color: #002147; }
-  .download-row { display:flex; flex-wrap:wrap; gap:.6rem; justify-content:center; }
-  small.note { color:#667; }
-  .issue { border-left: 4px solid #ccc; padding: .45rem .7rem; margin-bottom: .45rem;
-           background:#fafbfd; border-radius: 4px; font-size:.86rem; }
-  .issue.error   { border-left-color:#c0392b; background:#fdf1ef; }
-  .issue.warning { border-left-color:#e6a23c; background:#fdf8ee; }
-  .issue.info    { border-left-color:#4a90d9; background:#eff5fc; }
-  .issue .file   { font-weight:600; }
-  .badge-error{background:#c0392b}.badge-warning{background:#e6a23c}.badge-info{background:#4a90d9}
-  .review-table { font-size:.83rem; }
-  .review-table td, .review-table th { padding:.35rem .4rem; vertical-align:middle; }
-  .review-table select { font-size:.83rem; padding:.15rem .35rem; }
-  .fn { max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .row-empty { background:#fdecea; }
-  .row-mismatch { background:#fff7e6; }
-  .diag-table { font-size:.82rem; }
-  .diag-table td, .diag-table th { padding:.3rem .45rem; }
-  .m-yes { background:#dff5dc; font-weight:600; color:#1b7a28; text-align:center; }
-  .m-no  { background:#fdd; font-weight:600; color:#a1281c; text-align:center; }
-  .pill { font-size:.72rem; padding:.05rem .4rem; border-radius:10px; }
-  .pill-src { background:#eef1f6; color:#445; }
+  :root {
+    --canvas:  #E8EDEB;   /* cool grey-green backdrop */
+    --surface: #FFFFFF;
+    --sunken:  #F5F7F6;
+    --line:    #DDE3E1;
+    --ink:     #14212E;
+    --ink-2:   #55626F;
+    --ink-3:   #8A96A1;
+    --navy:    #0F2740;   /* rail + action card */
+    --navy-2:  #1E3A5A;
+    --lilac:   #ECEEFC;   /* files tile */
+    --lilac-f: #A7B2F2;
+    --mist:    #E5EFF3;   /* comments tile */
+    --mist-f:  #B9CFD8;
+    --ok:      #2F7D55;  --ok-bg:   #E2F2E8;
+    --warn:    #A86A12;  --warn-bg: #FBF0DC;
+    --err:     #B2362B;  --err-bg:  #FBE6E3;
+    --info:    #3B6EA8;  --info-bg: #E6EEF8;
+    --r-lg: 22px; --r-md: 14px; --r-sm: 9px;
+    --font: "Schibsted Grotesk", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body {
+    font-family: var(--font); font-size: 15px; line-height: 1.5;
+    color: var(--ink); background: var(--canvas);
+    -webkit-font-smoothing: antialiased;
+  }
+  button, select, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--navy-2); outline-offset: 2px; }
+
+  /* ---------- shell ---------- */
+  .shell {
+    display: grid; grid-template-columns: 72px 1fr;
+    max-width: 1240px; min-height: calc(100vh - 48px);
+    margin: 24px auto; background: var(--surface);
+    border-radius: 28px; overflow: hidden;
+    box-shadow: 0 30px 60px -30px rgba(15,39,64,.25);
+  }
+  .rail {
+    background: var(--navy); color: #fff;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 22px 0;
+  }
+  .mark {
+    font-weight: 700; font-size: 15px; letter-spacing: .02em;
+    width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.1);
+  }
+  .main {
+    padding: 34px 40px 44px;
+    background-image: radial-gradient(var(--line) 1px, transparent 1px);
+    background-size: 18px 18px;
+    background-color: #FBFCFC;
+    min-width: 0;
+  }
+
+  /* ---------- header ---------- */
+  .head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+          justify-content: space-between; margin-bottom: 22px; }
+  h1 { font-size: 34px; line-height: 1.1; font-weight: 600; margin: 0;
+       letter-spacing: -.015em; }
+  .sub { color: var(--ink-2); margin: 6px 0 0; max-width: 62ch; }
+
+  .steps { list-style: none; display: flex; gap: 6px; padding: 4px; margin: 0;
+           background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+  .steps li { padding: 7px 16px; border-radius: 999px; font-size: 13.5px;
+              color: var(--ink-3); white-space: nowrap; }
+  .steps li.done { color: var(--ink-2); }
+  .steps li[aria-current="step"] { background: var(--navy); color: #fff; }
+
+  /* ---------- tiles ---------- */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr 340px; gap: 16px; margin-bottom: 16px; }
+  .tile { border-radius: var(--r-lg); padding: 20px 22px; min-width: 0; }
+  .tile h2 { font-size: 17px; font-weight: 600; margin: 0; }
+  .tile-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .chip { font-size: 12.5px; padding: 3px 10px; border-radius: 999px;
+          background: var(--navy); color: #fff; white-space: nowrap; }
+  .chip.ok { background: var(--ok); } .chip.bad { background: var(--err); }
+  .big { font-size: 52px; font-weight: 500; line-height: 1; margin: 18px 0 14px;
+         font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .big small { font-size: 14px; font-weight: 400; color: var(--ink-2); letter-spacing: 0; margin-left: 4px; }
+  .t-files { background: var(--lilac); }
+  .t-comments { background: var(--mist); }
+
+  /* file meter: one cell per uploaded file */
+  .meter { display: grid; grid-template-columns: repeat(auto-fill, minmax(26px, 1fr));
+           gap: 5px; min-height: 30px; }
+  .cell { aspect-ratio: 1; border-radius: 7px; background: var(--lilac-f);
+          max-width: 40px; }
+  .cell.empty { background: transparent; border: 1.5px dashed #C3C9EE; }
+  .cell.ok   { background: #7FB89A; }
+  .cell.warn { background: #E2B464; }
+  .cell.err  { background: #D77A70; }
+  .meter-key { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px;
+               font-size: 12.5px; color: var(--ink-2); }
+  .meter-key span::before { content: ""; display: inline-block; width: 9px; height: 9px;
+               border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+  .k-ok::before { background: #7FB89A; } .k-warn::before { background: #E2B464; }
+  .k-err::before { background: #D77A70; }
+
+  .recon-bar { display: flex; height: 30px; border-radius: 8px; overflow: hidden; gap: 3px; }
+  .recon-bar div { background: var(--mist-f); min-width: 3px; }
+  .recon-bar .placeholder { background: transparent; border: 1.5px dashed var(--mist-f); border-radius: 8px; }
+  .recon-bar .compiled { background: #6E97A8; }
+  .recon-note { font-size: 12.5px; color: var(--ink-2); margin-top: 10px; }
+
+  /* action card */
+  .t-action { background: var(--navy); color: #fff; display: flex; flex-direction: column; gap: 12px; }
+  .t-action h2 { font-size: 19px; line-height: 1.25; }
+  .t-action label { font-size: 13px; color: #B9C6D4; display: block; margin-bottom: 6px; }
+  .t-action select { width: 100%; background: var(--navy-2); color: #fff;
+                     border: 1px solid #34506F; border-radius: var(--r-sm); padding: 9px 10px; }
+  .btn-primary {
+    margin-top: auto; width: 100%; border: 0; cursor: pointer;
+    background: #fff; color: var(--navy); font-weight: 600;
+    padding: 12px 16px; border-radius: 999px;
+  }
+  .btn-primary:hover { background: #E9EEF3; }
+  .btn-primary:disabled { opacity: .6; cursor: progress; }
+  .action-note { font-size: 12.5px; color: #B9C6D4; margin: 0; }
+
+  /* ---------- panels ---------- */
+  .grid2 { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+  .panel { background: var(--surface); border: 1px solid var(--line);
+           border-radius: var(--r-lg); padding: 20px 22px; min-width: 0; }
+  .panel h2 { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+  .panel h3 { font-size: 14.5px; font-weight: 600; margin: 20px 0 8px; }
+
+  #dropzone {
+    border: 1.5px dashed #BFC8C5; border-radius: var(--r-md);
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    background: var(--sunken); color: var(--ink-2);
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone strong { color: var(--ink); font-weight: 600; }
+  #dropzone.drag { border-color: var(--navy-2); background: var(--lilac); }
+  #dropzone small { display: block; margin-top: 4px; color: var(--ink-3); }
+
+  .filelist { list-style: none; margin: 12px 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
+  .filelist li { display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+                 border-bottom: 1px solid var(--line); font-size: 14px; }
+  .filelist li:last-child { border-bottom: 0; }
+  .ext { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
+         background: var(--lilac); color: #4A56A8; text-transform: lowercase; }
+  .ext.pdf { background: var(--warn-bg); color: var(--warn); }
+  .fname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fsize { color: var(--ink-3); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  .rm { border: 0; background: none; color: var(--ink-3); cursor: pointer;
+        width: 26px; height: 26px; border-radius: 50%; font-size: 17px; line-height: 1; }
+  .rm:hover { background: var(--sunken); color: var(--err); }
+  .bad { color: var(--err); }
+
+  .downloads { display: grid; gap: 8px; }
+  .dl { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        padding: 12px 14px; border-radius: var(--r-md); background: var(--sunken);
+        color: var(--ink); text-decoration: none; border: 1px solid transparent; }
+  .dl:hover { border-color: var(--line); background: #fff; }
+  .dl b { font-weight: 600; display: block; font-size: 14.5px; }
+  .dl span { font-size: 12.5px; color: var(--ink-2); }
+  .dl i { font-style: normal; font-size: 11.5px; font-weight: 600; padding: 3px 8px;
+          border-radius: 6px; background: #fff; color: var(--ink-2); border: 1px solid var(--line); }
+  .muted-p { color: var(--ink-2); font-size: 14px; margin: 0; }
+  .last { font-size: 13px; color: var(--ink-2); margin: 0 0 10px; }
+
+  /* spinner */
+  .spinner-wrap { display: none; align-items: center; gap: 10px; color: #B9C6D4; font-size: 13.5px; }
+  .spinner { width: 16px; height: 16px; border-radius: 50%;
+             border: 2px solid rgba(255,255,255,.25); border-top-color: #fff;
+             animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- results ---------- */
+  #result { margin-top: 16px; }
+  .alert { border-radius: var(--r-md); padding: 12px 14px; font-size: 14px; margin-bottom: 14px; }
+  .alert-success { background: var(--ok-bg); color: #1F5B3C; }
+  .alert-danger  { background: var(--err-bg); color: #84261E; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0 0 14px; font-size: 14px; }
+  .summary dt { color: var(--ink-2); display: inline; }
+  .summary dd { display: inline; margin: 0 0 0 6px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-weight: 500; color: var(--ink-2); padding: 8px 10px;
+       border-bottom: 1px solid var(--line); background: var(--sunken); }
+  th:first-child { border-top-left-radius: var(--r-sm); }
+  th:last-child  { border-top-right-radius: var(--r-sm); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  .m-yes, .m-no { text-align: center; font-weight: 600; font-size: 12.5px; }
+  .m-yes { color: var(--ok); } .m-no { color: var(--err); background: var(--err-bg); }
+  .note-row td { color: var(--ink-2); font-size: 12.5px; padding-top: 0; }
+
+  /* ---------- dialog ---------- */
+  dialog { border: 0; padding: 0; border-radius: var(--r-lg); width: min(1100px, calc(100vw - 32px));
+           max-height: calc(100vh - 48px); color: var(--ink);
+           box-shadow: 0 40px 80px -20px rgba(15,39,64,.45); }
+  dialog::backdrop { background: rgba(15,39,64,.45); }
+  dialog[open] { display: flex; flex-direction: column; }
+  .d-head { padding: 22px 26px 6px; }
+  .d-head h2 { font-size: 22px; font-weight: 600; margin: 0; }
+  .d-body { padding: 10px 26px 20px; overflow-y: auto; }
+  .d-body h3 { font-size: 16px; font-weight: 600; margin: 18px 0 4px; display: flex;
+               flex-wrap: wrap; gap: 8px; align-items: center; }
+  .d-body .hint { color: var(--ink-2); font-size: 13.5px; margin: 0 0 10px; max-width: 80ch; }
+  .d-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 26px;
+            border-top: 1px solid var(--line); background: var(--sunken); }
+  .btn { border-radius: 999px; padding: 9px 20px; cursor: pointer; font-weight: 500;
+         border: 1px solid var(--line); background: #fff; }
+  .btn:hover { background: var(--sunken); }
+  .btn-dark { background: var(--navy); color: #fff; border-color: var(--navy); font-weight: 600; }
+  .btn-dark:hover { background: var(--navy-2); }
+
+  .review-table select, .form-select {
+    width: 100%; border: 1px solid var(--line); border-radius: var(--r-sm);
+    padding: 6px 8px; background: #fff; font-size: 13.5px;
+  }
+  .fn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 6px; }
+  .pill-src { background: var(--sunken); color: var(--ink-2); border: 1px solid var(--line); }
+  .row-empty td { background: var(--err-bg); }
+  .row-mismatch td { background: var(--warn-bg); }
+  .form-check-input { width: 17px; height: 17px; accent-color: var(--navy); }
+
+  .counts span { font-size: 12px; font-weight: 500; padding: 2px 9px; border-radius: 999px; }
+  .badge-error   { background: var(--err-bg);  color: var(--err); }
+  .badge-warning { background: var(--warn-bg); color: var(--warn); }
+  .badge-info    { background: var(--info-bg); color: var(--info); }
+  .issue { padding: 8px 12px; margin-bottom: 6px; border-radius: var(--r-sm);
+           font-size: 13.5px; border-left: 3px solid var(--line); background: var(--sunken); }
+  .issue.error   { border-left-color: var(--err);  background: var(--err-bg); }
+  .issue.warning { border-left-color: var(--warn); background: var(--warn-bg); }
+  .issue.info    { border-left-color: var(--info); background: var(--info-bg); }
+  .issue .file { font-weight: 600; }
+  #noIssues { color: var(--ok); font-size: 14px; }
+
+  /* small utilities used by the scripts */
+  .small { font-size: 12.5px; } .text-center { text-align: center; }
+  .text-danger { color: var(--err); } .text-warning { color: var(--warn); }
+  .text-muted { color: var(--ink-3); } .fw-bold { font-weight: 700; }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 1080px) {
+    .tiles { grid-template-columns: 1fr 1fr; }
+    .t-action { grid-column: 1 / -1; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .shell { grid-template-columns: 1fr; margin: 0; border-radius: 0; min-height: 100vh; }
+    .rail { flex-direction: row; padding: 12px 16px; }
+    .main { padding: 22px 16px 32px; }
+    h1 { font-size: 27px; }
+    .tiles { grid-template-columns: 1fr; }
+    .steps { overflow-x: auto; max-width: 100%; }
+    .big { font-size: 42px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation-duration: 2s !important; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <h4 class="title">Key Issue Document Compiler (FATF MER)</h4>
+<div class="shell">
+  <aside class="rail" aria-label="FATF">
+    <div class="mark" title="Key Issue Document Compiler">KID</div>
+  </aside>
+
+  <main class="main">
+    <header class="head">
+      <div>
+        <h1>Key Issue Document compiler</h1>
+        <p class="sub">Combine delegation comments on a Mutual Evaluation Report into one Excel analysis, a FATF-styled Word document and a reconciliation report.</p>
+      </div>
+      <ol class="steps" id="steps">
+        <li data-step="1" aria-current="step">Add files</li>
+        <li data-step="2">Review</li>
+        <li data-step="3">Download</li>
+      </ol>
+    </header>
 
     <form id="f" enctype="multipart/form-data">
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Delegation response files (.docx / .pdf)</label>
-        <div id="dropzone">
-          <div><strong>Drop files here</strong> or click to browse</div>
-          <small class="note">Word templates preferred; PDFs are parsed too.</small>
+      <section class="tiles">
+        <div class="tile t-files">
+          <div class="tile-top">
+            <h2>Delegation files</h2>
+            <span class="chip" id="filesChip" hidden></span>
+          </div>
+          <div class="big"><span id="fileCount">0</span><small>files</small></div>
+          <div class="meter" id="meter" aria-hidden="true"></div>
+          <div class="meter-key" id="meterKey" hidden>
+            <span class="k-ok">Ready</span><span class="k-warn">Check country</span><span class="k-err">No comments or unreadable</span>
+          </div>
         </div>
-        <input id="files" name="files" type="file" multiple accept=".docx,.pdf" hidden>
-        <div id="filelist" class="filelist" style="display:none"></div>
-      </div>
 
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Assessed country
-          <small class="note">(the country being evaluated)</small></label>
-        <select id="country" name="assessed_country" class="form-select">
-          <option value="">Auto-detect from filenames</option>
-        </select>
-      </div>
+        <div class="tile t-comments">
+          <div class="tile-top">
+            <h2>Comments compiled</h2>
+            <span class="chip" id="reconChip" hidden></span>
+          </div>
+          <div class="big"><span id="commentCount">–</span><small id="commentSub">after compiling</small></div>
+          <div class="recon-bar" id="reconBar" aria-hidden="true"><div class="placeholder" style="flex:1"></div></div>
+          <p class="recon-note" id="reconNote">Source rows, skipped rows and removed duplicates are reconciled per file.</p>
+        </div>
 
-      <button id="go" type="submit" class="btn btn-fatf w-100">Check and Compile</button>
-      <small class="note d-block text-center mt-2">
-        Every file is checked first. You confirm each delegation's country and
-        whether it was late before anything is compiled.
-      </small>
+        <div class="tile t-action">
+          <h2>Check the files, then compile</h2>
+          <div>
+            <label for="country">Assessed country</label>
+            <select id="country" name="assessed_country">
+              <option value="">Detect from file names</option>
+            </select>
+          </div>
+          <p class="action-note">You confirm each delegation's country and timeliness before anything is compiled.</p>
+          <div class="spinner-wrap" id="spin" role="status"><span class="spinner"></span><span id="spinLabel">Checking files…</span></div>
+          <button id="go" type="submit" class="btn-primary">Check and compile</button>
+        </div>
+      </section>
+
+      <section class="grid2">
+        <div class="panel">
+          <h2>Add delegation responses</h2>
+          <div id="dropzone" role="button" tabindex="0" aria-controls="files">
+            <div><strong>Drop .docx or .pdf files here</strong> or click to browse</div>
+            <small>Use the Word comment template where possible. PDFs are read with reduced formatting.</small>
+          </div>
+          <input id="files" name="files" type="file" multiple accept=".docx,.pdf" hidden>
+          <ul id="filelist" class="filelist" hidden></ul>
+        </div>
+
+        <div class="panel">
+          <h2>Downloads</h2>
+          {% if last.excel %}
+          <p class="last">Last run {{ last.when }}: {{ last.country }}, {{ last.comment_count }} comments from {{ last.ok_count }} files.</p>
+          {% endif %}
+          <div class="downloads" id="downloads" {% if not last.excel %}hidden{% endif %}>
+            <a class="dl" href="/download/word"><div><b>Compiled document</b><span>FATF-styled Key Issue Document</span></div><i>DOCX</i></a>
+            <a class="dl" href="/download/excel"><div><b>Analysis workbook</b><span>All comments, by section and delegation</span></div><i>XLSX</i></a>
+            <a class="dl" href="/download/diagnostics"><div><b>Diagnostic report</b><span>Reconciliation and manual checks</span></div><i>XLSX</i></a>
+          </div>
+          {% if not last.excel %}
+          <p class="muted-p" id="noDownloads">Your compiled files appear here once you compile.</p>
+          {% endif %}
+        </div>
+      </section>
     </form>
 
-    <div class="spinner-wrap" id="spin">
-      <div class="spinner-border text-primary" role="status"></div>
-      <div id="spinLabel">Checking files…</div>
-    </div>
+    <section id="result" class="panel" hidden>
+      <h2>Compilation check</h2>
+      <dl class="summary">
+        <div><dt>Assessed country</dt><dd id="rCountry"></dd></div>
+        <div><dt>Files processed</dt><dd id="rFiles"></dd></div>
+        <div><dt>Comments compiled</dt><dd id="rComments"></dd></div>
+      </dl>
+      <div id="reconBanner" class="alert" hidden></div>
 
-    <div id="result" class="mt-4" style="display:none">
-      <hr>
-      <p class="mb-2"><strong>Assessed country:</strong> <span id="rCountry"></span></p>
-      <p class="mb-2"><strong>Files processed:</strong> <span id="rFiles"></span></p>
-      <p class="mb-3"><strong>Comments compiled:</strong> <span id="rComments"></span></p>
-
-      <div id="reconBanner" class="alert py-2 mb-3" style="display:none"></div>
-
-      <div class="download-row">
-        <a href="/download/excel" class="btn btn-success px-4">Download Excel</a>
-        <a href="/download/word"  class="btn btn-fatf px-4">Download Word</a>
-        <a href="/download/diagnostics" class="btn btn-outline-dark px-4">Download Diagnostic Report</a>
+      <h3>By file</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>File</th><th>Country</th><th class="num">Source rows</th>
+            <th class="num">In compilation</th><th class="text-center">Match</th></tr></thead>
+          <tbody id="diagFileRows"></tbody>
+        </table>
       </div>
-
-      <div class="mt-4">
-        <h6 class="fw-semibold mb-2">Diagnostic check – by file</h6>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered diag-table">
-            <thead class="table-light"><tr><th>File</th><th>Country</th>
-              <th>Source rows</th><th>In compilation</th><th>Match</th></tr></thead>
-            <tbody id="diagFileRows"></tbody>
-          </table>
-        </div>
-        <h6 class="fw-semibold mb-2 mt-3">Diagnostic check – by country</h6>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered diag-table">
-            <thead class="table-light"><tr><th>Country</th><th>Files</th>
-              <th>Expected</th><th>In compilation</th><th>Match</th></tr></thead>
-            <tbody id="diagCountryRows"></tbody>
-          </table>
-        </div>
-        <small class="note">Rows needing a human decision are listed in the
-          "Manual Checks" sheet of the diagnostic report.</small>
+      <h3>By delegation</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Country</th><th>Files</th><th class="num">Expected</th>
+            <th class="num">In compilation</th><th class="text-center">Match</th></tr></thead>
+          <tbody id="diagCountryRows"></tbody>
+        </table>
       </div>
+      <p class="muted-p small" style="margin-top:10px">Rows that need a decision are listed on the Manual Checks sheet of the diagnostic report.</p>
 
-      <div id="failedBox" class="mt-3" style="display:none">
-        <small class="note">Files that produced no comments:</small>
-        <div id="rFailed" class="filelist"></div>
+      <div id="failedBox" hidden>
+        <h3>Files that produced no comments</h3>
+        <ul id="rFailed" class="filelist"></ul>
       </div>
-    </div>
-
-    {% if last.excel %}
-    <div class="mt-4">
-      <hr>
-      <small class="note">Last run: {{ last.when }} · country: {{ last.country }} ·
-         {{ last.comment_count }} comments from {{ last.ok_count }} files.</small>
-      <div class="download-row mt-2">
-        <a href="/download/excel" class="btn btn-outline-success btn-sm">Re-download Excel</a>
-        <a href="/download/word" class="btn btn-outline-dark btn-sm">Re-download Word</a>
-        <a href="/download/diagnostics" class="btn btn-outline-secondary btn-sm">Re-download Diagnostics</a>
-      </div>
-    </div>
-    {% endif %}
-  </div>
+    </section>
+  </main>
 </div>
 
-<!-- ===================== REVIEW / VALIDATION MODAL ===================== -->
-<div class="modal fade" id="checkModal" tabindex="-1" data-bs-backdrop="static">
-  <div class="modal-dialog modal-xl modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Confirm before compiling</h5>
-      </div>
-      <div class="modal-body">
-
-        <h6 class="fw-semibold">1 · Confirm each delegation</h6>
-        <p class="small text-muted mb-2">
-          Check the country against the file. Correct it from the dropdown if
-          wrong – typing is disabled so a delegation can never be misspelled.
-          Set Late where the submission missed the deadline.
-        </p>
-        <div class="table-responsive">
-          <table class="table table-sm table-bordered review-table align-middle">
-            <thead class="table-light">
-              <tr><th style="width:26%">File</th><th style="width:12%">Detected</th>
-                  <th style="width:26%">Country making the comments</th>
-                  <th style="width:14%">Timeliness</th>
-                  <th style="width:10%">Comments</th>
-                  <th style="width:12%">Accept empty</th></tr>
-            </thead>
-            <tbody id="reviewRows"></tbody>
-          </table>
-        </div>
-
-        <div id="blockBox" class="alert alert-danger py-2" style="display:none"></div>
-
-        <hr>
-        <h6 class="fw-semibold">2 · Findings
-          <span class="badge badge-error"   id="cntError">0 errors</span>
-          <span class="badge badge-warning" id="cntWarn">0 warnings</span>
-          <span class="badge badge-info"    id="cntInfo">0 notices</span>
-        </h6>
-        <div id="issueList"></div>
-        <div id="noIssues" class="text-success" style="display:none">
-          ✔ No issues found – everything looks clean.
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" id="confirmCompile" class="btn btn-fatf">Compile</button>
-      </div>
+<!-- ===================== REVIEW / VALIDATION DIALOG ===================== -->
+<dialog id="checkModal" aria-labelledby="checkTitle">
+  <div class="d-head"><h2 id="checkTitle">Confirm before compiling</h2></div>
+  <div class="d-body">
+    <h3>Confirm each delegation</h3>
+    <p class="hint">Check the country against each file and correct it from the list if needed. Set Late where the submission missed the deadline.</p>
+    <div class="table-wrap">
+      <table class="review-table">
+        <thead>
+          <tr><th style="width:26%">File</th><th style="width:12%">Found in file</th>
+              <th style="width:26%">Commenting delegation</th>
+              <th style="width:14%">Timeliness</th>
+              <th style="width:10%" class="text-center">Comments</th>
+              <th style="width:12%" class="text-center">Accept empty</th></tr>
+        </thead>
+        <tbody id="reviewRows"></tbody>
+      </table>
     </div>
-  </div>
-</div>
+    <div id="blockBox" class="alert alert-danger" style="margin-top:12px" hidden></div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <h3>Findings
+      <span class="counts">
+        <span class="badge-error" id="cntError">0 errors</span>
+        <span class="badge-warning" id="cntWarn">0 warnings</span>
+        <span class="badge-info" id="cntInfo">0 notices</span>
+      </span>
+    </h3>
+    <div id="issueList"></div>
+    <div id="noIssues" hidden>No issues found.</div>
+  </div>
+  <div class="d-foot">
+    <button type="button" class="btn" id="cancelCompile">Cancel</button>
+    <button type="button" id="confirmCompile" class="btn btn-dark">Compile</button>
+  </div>
+</dialog>
+
 <script>
-const filesInput = document.getElementById('files');
-const dz   = document.getElementById('dropzone');
-const list = document.getElementById('filelist');
-const countrySel = document.getElementById('country');
+const $ = id => document.getElementById(id);
+const filesInput = $('files');
+const dz   = $('dropzone');
+const list = $('filelist');
+const countrySel = $('country');
+const modal = $('checkModal');
 
 let selectedFiles = [];
 let lastValidation = null;
 let countryGroups = null;
+let fileStatus = {};   // filename -> ok | warn | err (after validation)
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,
+  m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function setStep(n) {
+  document.querySelectorAll('#steps li').forEach(li => {
+    const s = +li.dataset.step;
+    li.toggleAttribute('aria-current', s === n);
+    if (s === n) li.setAttribute('aria-current', 'step');
+    li.classList.toggle('done', s < n);
+  });
+}
 
 /* ---------- file picking ---------- */
 function renderList() {
-  if (!selectedFiles.length) { list.style.display='none'; return; }
-  list.style.display='block';
-  list.innerHTML = selectedFiles.map(f =>
-    `<div class="ok">• ${esc(f.name)} <small>(${(f.size/1024).toFixed(0)} KB)</small></div>`).join('');
+  $('fileCount').innerText = selectedFiles.length;
+  renderMeter();
+  if (!selectedFiles.length) { list.hidden = true; return; }
+  list.hidden = false;
+  list.innerHTML = selectedFiles.map((f, i) => {
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    return `<li><span class="ext ${ext}">${esc(ext)}</span>
+      <span class="fname" title="${esc(f.name)}">${esc(f.name)}</span>
+      <span class="fsize">${(f.size/1024).toFixed(0)} KB</span>
+      <button type="button" class="rm" data-i="${i}" aria-label="Remove ${esc(f.name)}">×</button></li>`;
+  }).join('');
 }
-function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g,
-  m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function renderMeter() {
+  const m = $('meter'), n = selectedFiles.length;
+  const slots = Math.max(n, 8);
+  let html = '';
+  for (let i = 0; i < slots; i++) {
+    if (i >= n) { html += '<div class="cell empty"></div>'; continue; }
+    const st = fileStatus[selectedFiles[i].name] || '';
+    html += `<div class="cell ${st}" title="${esc(selectedFiles[i].name)}"></div>`;
+  }
+  m.innerHTML = html;
+  const validated = Object.keys(fileStatus).length > 0;
+  $('meterKey').hidden = !validated;
+  const chip = $('filesChip');
+  if (validated) {
+    const ok = Object.values(fileStatus).filter(s => s === 'ok').length;
+    chip.hidden = false; chip.innerText = `${ok} of ${n} ready`;
+  } else { chip.hidden = true; }
+}
+function setFiles(files) {
+  selectedFiles = files; fileStatus = {}; setStep(1); renderList();
+}
+list.addEventListener('click', e => {
+  const b = e.target.closest('.rm'); if (!b) return;
+  const next = selectedFiles.slice(); next.splice(+b.dataset.i, 1); setFiles(next);
+});
 
 /* populate the assessed-country picker on load so nothing is ever typed */
 fetch('/countries').then(r=>r.json()).then(j=>{ countryGroups=j.groups; fillAssessed(j.groups); })
   .catch(()=>{});
 
 dz.addEventListener('click', () => filesInput.click());
+dz.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); filesInput.click(); } });
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
 dz.addEventListener('drop', e => {
   e.preventDefault(); dz.classList.remove('drag');
-  selectedFiles = Array.from(e.dataTransfer.files).filter(f => /\.(docx|pdf)$/i.test(f.name));
-  renderList();
+  setFiles(Array.from(e.dataTransfer.files).filter(f => /\.(docx|pdf)$/i.test(f.name)));
 });
-filesInput.addEventListener('change', () => {
-  selectedFiles = Array.from(filesInput.files); renderList();
-});
+filesInput.addEventListener('change', () => setFiles(Array.from(filesInput.files)));
 
 /* ---------- country dropdown helpers ---------- */
 function optionsHtml(groups, selected) {
@@ -237,7 +521,7 @@ function optionsHtml(groups, selected) {
 }
 function fillAssessed(groups) {
   if (countrySel.dataset.filled) return;
-  countrySel.innerHTML = '<option value="">Auto-detect from filenames</option>'
+  countrySel.innerHTML = '<option value="">Detect from file names</option>'
                        + optionsHtml(groups, '').replace('<option value="">Select country</option>', '');
   countrySel.dataset.filled = '1';
 }
@@ -249,17 +533,17 @@ function buildForm() {
   return form;
 }
 function spin(on, label) {
-  document.getElementById('spin').style.display = on ? 'block' : 'none';
-  document.getElementById('spinLabel').innerText = label || 'Working…';
-  document.getElementById('go').disabled = on;
+  $('spin').style.display = on ? 'flex' : 'none';
+  $('spinLabel').innerText = label || 'Working…';
+  $('go').disabled = on;
 }
 
 /* ---------- phase 1: validate ---------- */
-document.getElementById('f').addEventListener('submit', async e => {
+$('f').addEventListener('submit', async e => {
   e.preventDefault();
   if (!selectedFiles.length) return alert('Add .docx or .pdf files first.');
   spin(true, 'Checking files…');
-  document.getElementById('result').style.display = 'none';
+  $('result').hidden = true;
   try {
     const res = await fetch('/validate', { method:'POST', body: buildForm() });
     const j = await res.json();
@@ -267,30 +551,35 @@ document.getElementById('f').addEventListener('submit', async e => {
     if (!j.ok) return alert('Error: ' + (j.error || 'unknown'));
     lastValidation = j; countryGroups = j.countries;
     fillAssessed(j.countries);
+    fileStatus = {};
+    j.assignments.forEach(a => {
+      fileStatus[a.filename] = (a.error || a.empty) ? 'err'
+        : (a.mismatch || !a.selected) ? 'warn' : 'ok';
+    });
+    renderMeter();
     showModal(j);
   } catch (err) { spin(false); alert('Error: ' + err.message); }
 });
 
 function showModal(v) {
-  const rows = document.getElementById('reviewRows');
-  rows.innerHTML = v.assignments.map(a => {
+  $('reviewRows').innerHTML = v.assignments.map(a => {
     const cls = a.empty ? 'row-empty' : (a.mismatch ? 'row-mismatch' : '');
     const detected = a.error ? '<span class="text-danger">unreadable</span>'
       : (a.declared ? esc(a.declared) + (a.recognised ? '' : ' <span class="text-warning">?</span>')
                     : '<span class="text-muted">none in file</span>');
     const acc = a.empty
-      ? `<input type="checkbox" class="form-check-input accept-empty" data-filename="${esc(a.filename)}">`
+      ? `<input type="checkbox" class="form-check-input accept-empty" data-filename="${esc(a.filename)}" aria-label="Accept ${esc(a.filename)} as empty">`
       : '<span class="text-muted small">n.a.</span>';
     return `<tr class="${cls}">
       <td class="fn" title="${esc(a.filename)}">${esc(a.filename)}
         <div><span class="pill pill-src">${esc(a.kind||'')}</span></div></td>
       <td class="small">${detected}</td>
-      <td><select class="form-select form-select-sm country-pick"
-                  data-filename="${esc(a.filename)}">
+      <td><select class="form-select country-pick" data-filename="${esc(a.filename)}"
+                  aria-label="Delegation for ${esc(a.filename)}">
             ${optionsHtml(v.countries, a.selected)}
           </select></td>
-      <td><select class="form-select form-select-sm late-pick"
-                  data-filename="${esc(a.filename)}">
+      <td><select class="form-select late-pick" data-filename="${esc(a.filename)}"
+                  aria-label="Timeliness for ${esc(a.filename)}">
             <option value="0"${a.late ? '' : ' selected'}>On time</option>
             <option value="1"${a.late ? ' selected' : ''}>Late</option>
           </select></td>
@@ -299,32 +588,35 @@ function showModal(v) {
     </tr>`;
   }).join('');
 
-  const block = document.getElementById('blockBox');
+  const block = $('blockBox');
   if (v.empty_files.length) {
-    block.style.display = 'block';
+    block.hidden = false;
     block.innerHTML = `<strong>${v.empty_files.length} file(s) produced no comments.</strong>
-      Fix and re-upload them, or tick “Accept empty” so it is recorded that they
-      contribute nothing. Compiling is blocked until then.`;
-  } else { block.style.display = 'none'; }
+      Fix and re-upload them, or tick Accept empty to record that they contribute
+      nothing. Compiling is blocked until then.`;
+  } else { block.hidden = true; }
 
-  const listEl = document.getElementById('issueList');
+  const listEl = $('issueList');
   listEl.innerHTML = ''; let nE=0,nW=0,nI=0;
   v.issues.forEach(i => {
     if (i.severity==='error') nE++; else if (i.severity==='warning') nW++; else nI++;
     const d=document.createElement('div'); d.className='issue '+i.severity;
-    d.innerHTML=`<span class="file">${esc(i.file)}</span> – ${esc(i.message)}`;
+    d.innerHTML=`<span class="file">${esc(i.file)}</span>: ${esc(i.message)}`;
     listEl.appendChild(d);
   });
-  document.getElementById('cntError').innerText = nE+' errors';
-  document.getElementById('cntWarn').innerText  = nW+' warnings';
-  document.getElementById('cntInfo').innerText  = nI+' notices';
-  document.getElementById('noIssues').style.display = v.issues.length ? 'none' : 'block';
+  $('cntError').innerText = nE + (nE === 1 ? ' error' : ' errors');
+  $('cntWarn').innerText  = nW + (nW === 1 ? ' warning' : ' warnings');
+  $('cntInfo').innerText  = nI + (nI === 1 ? ' notice' : ' notices');
+  $('noIssues').hidden = !!v.issues.length;
 
-  new bootstrap.Modal(document.getElementById('checkModal')).show();
+  setStep(2);
+  modal.showModal();
 }
+$('cancelCompile').addEventListener('click', () => { modal.close(); setStep(1); });
+modal.addEventListener('cancel', () => setStep(1));
 
 /* ---------- phase 2: compile ---------- */
-document.getElementById('confirmCompile').addEventListener('click', async () => {
+$('confirmCompile').addEventListener('click', async () => {
   const decisions = {}; let missing = null;
   document.querySelectorAll('.country-pick').forEach(sel => {
     const fn = sel.dataset.filename, v = sel.value.trim();
@@ -345,10 +637,10 @@ document.getElementById('confirmCompile').addEventListener('click', async () => 
   const blocked = empties.filter(f => !accepted.includes(f));
   if (blocked.length) {
     return alert('These files produced no comments:\n\n• ' + blocked.join('\n• ') +
-      '\n\nFix and re-upload them, or tick “Accept empty” for each.');
+      '\n\nFix and re-upload them, or tick Accept empty for each.');
   }
 
-  bootstrap.Modal.getInstance(document.getElementById('checkModal')).hide();
+  modal.close();
   spin(true, 'Compiling…');
   const form = buildForm();
   form.append('jurisdiction_overrides', JSON.stringify(decisions));
@@ -359,49 +651,72 @@ document.getElementById('confirmCompile').addEventListener('click', async () => 
     const j = await res.json();
     spin(false);
     if (!j.ok) {
+      setStep(1);
       if (j.blocked) return alert(j.error + '\n\n• ' + (j.needs_acknowledgement||[]).join('\n• '));
       return alert('Error: ' + (j.error || 'unknown'));
     }
-    document.getElementById('rCountry').innerText  = j.country;
-    document.getElementById('rFiles').innerText    = j.files_ok;
-    document.getElementById('rComments').innerText = j.comments;
+    $('rCountry').innerText  = j.country;
+    $('rFiles').innerText    = j.files_ok;
+    $('rComments').innerText = j.comments;
     if (j.failed && j.failed.length) {
-      document.getElementById('failedBox').style.display = 'block';
-      document.getElementById('rFailed').innerHTML =
-        j.failed.map(n => `<div class="bad">• ${esc(n)}</div>`).join('');
-    } else { document.getElementById('failedBox').style.display = 'none'; }
+      $('failedBox').hidden = false;
+      $('rFailed').innerHTML = j.failed.map(n => `<li class="bad">${esc(n)}</li>`).join('');
+    } else { $('failedBox').hidden = true; }
     renderDiagnostics(j);
-    document.getElementById('result').style.display = 'block';
-  } catch (err) { spin(false); alert('Error: ' + err.message); }
+    $('downloads').hidden = false;
+    const nd = $('noDownloads'); if (nd) nd.hidden = true;
+    $('result').hidden = false;
+    setStep(3);
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) { spin(false); setStep(1); alert('Error: ' + err.message); }
 });
 
 function renderDiagnostics(j) {
   const d = j.diagnostics || {}, t = d.totals || {};
-  const b = document.getElementById('reconBanner');
+
+  /* comments tile */
+  $('commentCount').innerText = j.comments;
+  $('commentSub').innerText = t.countries != null ? `from ${t.countries} delegations` : 'comments';
+  const chip = $('reconChip');
+  chip.hidden = false;
+  chip.className = 'chip ' + (j.reconciled ? 'ok' : 'bad');
+  chip.innerText = j.reconciled ? 'Reconciled' : 'Mismatch';
+  const src = +t.rows_in_source || 0;
+  if (src) {
+    const part = (n, cls) => n > 0 ? `<div class="${cls}" style="flex:${n}"></div>` : '';
+    $('reconBar').innerHTML = part(+t.compiled || 0, 'compiled')
+      + part(+t.rows_skipped || 0, 'skipped') + part(+t.duplicates_removed || 0, 'dupes');
+    $('reconNote').innerText = `${src} source rows: ${t.compiled} compiled, `
+      + `${t.rows_skipped} skipped, ${t.duplicates_removed} duplicates removed.`;
+  }
+
+  const b = $('reconBanner');
   if (j.reconciled) {
-    b.className = 'alert alert-success py-2 mb-3';
-    b.innerHTML = `<strong>✔ All counts reconcile.</strong> ${t.rows_in_source} source rows →
-      ${t.rows_skipped} skipped, ${t.duplicates_removed} duplicates removed →
+    b.className = 'alert alert-success';
+    b.innerHTML = `<strong>All counts reconcile.</strong> ${t.rows_in_source} source rows,
+      ${t.rows_skipped} skipped and ${t.duplicates_removed} duplicates removed, giving
       ${t.compiled} comments across ${t.countries} delegations.`;
   } else {
-    b.className = 'alert alert-danger py-2 mb-3';
-    b.innerHTML = `<strong>⚠ Count mismatch.</strong> ${j.file_mismatches} file(s) and
-      ${j.country_mismatches} country/countries do not reconcile – see the report.`;
+    b.className = 'alert alert-danger';
+    b.innerHTML = `<strong>Counts do not reconcile.</strong> ${j.file_mismatches} file(s) and
+      ${j.country_mismatches} delegation(s) differ. See the diagnostic report.`;
   }
-  b.style.display = 'block';
+  b.hidden = false;
 
-  document.getElementById('diagFileRows').innerHTML = (d.files||[]).map(f => `
+  $('diagFileRows').innerHTML = (d.files||[]).map(f => `
     <tr><td>${esc(f['File name'])}</td><td>${esc(f['Country assigned'])}</td>
-      <td>${f['Rows in source table']}</td><td>${f['Actually in compilation']}</td>
+      <td class="num">${f['Rows in source table']}</td><td class="num">${f['Actually in compilation']}</td>
       <td class="${f['Match']==='YES'?'m-yes':'m-no'}">${f['Match']}</td></tr>` +
-    (f['Notes'] ? `<tr><td colspan="5" class="small text-muted">${esc(f['Notes'])}</td></tr>` : '')
+    (f['Notes'] ? `<tr class="note-row"><td colspan="5">${esc(f['Notes'])}</td></tr>` : '')
   ).join('');
 
-  document.getElementById('diagCountryRows').innerHTML = (d.countries||[]).map(c => `
+  $('diagCountryRows').innerHTML = (d.countries||[]).map(c => `
     <tr><td>${esc(c['Country'])}</td><td class="small">${c['No. of files']}</td>
-      <td>${c['Expected comments']}</td><td>${c['Comments in compilation']}</td>
+      <td class="num">${c['Expected comments']}</td><td class="num">${c['Comments in compilation']}</td>
       <td class="${c['Match']==='YES'?'m-yes':'m-no'}">${c['Match']}</td></tr>`).join('');
 }
+
+renderMeter();
 </script>
 </body>
 </html>
